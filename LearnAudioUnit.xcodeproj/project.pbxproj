@@ -110,6 +110,7 @@
 				TargetAttributes = {
 					FDDA14391F5CF127009FFBF5 = {
 						CreatedOnToolsVersion = 8.3.1;
+						DevelopmentTeam = 6X5L546LN9;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -272,6 +273,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = 6X5L546LN9;
 				INFOPLIST_FILE = LearnAudioUnit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = loying.LearnAudioUnit;
@@ -283,6 +285,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				DEVELOPMENT_TEAM = 6X5L546LN9;
 				INFOPLIST_FILE = LearnAudioUnit/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				PRODUCT_BUNDLE_IDENTIFIER = loying.LearnAudioUnit;
@@ -309,6 +312,7 @@
 				FDDA14531F5CF127009FFBF5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
