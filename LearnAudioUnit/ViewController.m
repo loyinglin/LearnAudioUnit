@@ -9,7 +9,7 @@
 #import "ViewController.h"
 #import <AVFoundation/AVFoundation.h>
 #import <AudioUnit/AudioUnit.h>
- 
+
 #define INPUT_BUS 1
 #define OUTPUT_BUS 0
 
@@ -22,6 +22,7 @@
 {
     AudioUnit audioUnit;
     AudioBufferList *buffList;
+    
 }
 
 
@@ -38,7 +39,6 @@
 
 
 - (void)initRemoteIO {
-    AudioUnitInitialize(audioUnit);
     [self initAudioSession];
     
     [self initBuffer];
@@ -52,6 +52,8 @@
     [self initRecordeCallback];
     
     [self initPlayCallback];
+    OSStatus result = AudioUnitInitialize(audioUnit);
+    NSLog(@"result %d", result);
 }
 
 - (void)initAudioSession {
@@ -103,6 +105,24 @@
     audioFormat.mBytesPerPacket = 2;
     audioFormat.mBytesPerFrame = 2;
     
+    UInt32 outDataSize;
+    Boolean outWritable;
+    AudioUnitGetPropertyInfo(audioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, INPUT_BUS, &outDataSize, &outWritable);
+    NSLog(@"size:%d, able:%d", outDataSize, outWritable);
+    
+    AudioStreamBasicDescription outputFormat;
+    OSStatus status;
+    UInt32 outputSize = sizeof(outputFormat);
+    status =  AudioUnitGetProperty(audioUnit,
+                                   kAudioUnitProperty_StreamFormat,
+                                   kAudioUnitScope_Input,
+                                   OUTPUT_BUS,
+                                   &outputFormat,
+                                   &outputSize);
+    if (status != noErr) {
+        NSLog(@"AudioUnitGetProperty error, ret: %d", status);
+    }
+    
     AudioUnitSetProperty(audioUnit,
                          kAudioUnitProperty_StreamFormat,
                          kAudioUnitScope_Output,
@@ -115,6 +135,17 @@
                          OUTPUT_BUS,
                          &audioFormat,
                          sizeof(audioFormat));
+    
+    // after set
+    status =  AudioUnitGetProperty(audioUnit,
+                                   kAudioUnitProperty_StreamFormat,
+                                   kAudioUnitScope_Input,
+                                   OUTPUT_BUS,
+                                   &outputFormat,
+                                   &outputSize);
+    if (status != noErr) {
+        NSLog(@"AudioUnitGetProperty error, ret: %d", status);
+    }
 }
 
 
@@ -124,7 +155,7 @@
     recordCallback.inputProcRefCon = (__bridge void *)self;
     AudioUnitSetProperty(audioUnit,
                          kAudioOutputUnitProperty_SetInputCallback,
-                         kAudioUnitScope_Global,
+                         kAudioUnitScope_Output,
                          INPUT_BUS,
                          &recordCallback,
                          sizeof(recordCallback));
@@ -136,7 +167,7 @@
     playCallback.inputProcRefCon = (__bridge void *)self;
     AudioUnitSetProperty(audioUnit,
                          kAudioUnitProperty_SetRenderCallback,
-                         kAudioUnitScope_Global,
+                         kAudioUnitScope_Input,
                          OUTPUT_BUS,
                          &playCallback,
                          sizeof(playCallback));
@@ -151,6 +182,7 @@
                          INPUT_BUS,
                          &flag,
                          sizeof(flag));
+    
     AudioUnitSetProperty(audioUnit,
                          kAudioOutputUnitProperty_EnableIO,
                          kAudioUnitScope_Input,
@@ -200,7 +232,6 @@ static OSStatus PlayCallback(void *inRefCon,
 }
 
 - (IBAction)stopRecorder:(id)sender {
-    
     AudioOutputUnitStop(audioUnit);
     [self audio_release];
 }
@@ -237,4 +268,9 @@ static OSStatus PlayCallback(void *inRefCon,
     }
     AudioUnitUninitialize(audioUnit);
 }
+
+
+
+
+
 @end
