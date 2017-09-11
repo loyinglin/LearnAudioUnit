@@ -9,6 +9,7 @@
 #import "AACPlayer.h"
 #import <AudioUnit/AudioUnit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <assert.h>
 
 const uint32_t CONST_BUFFER_SIZE = 0x10000;
 const uint32_t CONST_UNIT_SIZE = 2048;
@@ -20,6 +21,8 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 {
     AudioFileID audioFileID; // An opaque data type that represents an audio file object.
     AudioStreamBasicDescription audioStreamBasicDescrpition; // An audio data format specification for a stream of audio
+    AudioStreamPacketDescription *audioStreamPacketDescrption;
+    
     
     SInt64 readedPacket; //参数类型
     UInt64 packetNums;
@@ -32,6 +35,9 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     UInt32  totalPoistion;
     
     BOOL isPlaying;
+    
+    
+    AudioConverterRef audioConverter;
 }
 
 
@@ -45,9 +51,7 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 - (void)customAudioConfig {
     NSURL *url = [[NSBundle mainBundle] URLForResource:@"abc" withExtension:@"aac"];
     
-//    AudioFileCreateWithURL((__bridge CFURLRef)ur, kAudioFileMP3Type, <#const AudioStreamBasicDescription * _Nonnull inFormat#>, <#AudioFileFlags inFlags#>, <#AudioFileID  _Nullable * _Nonnull outAudioFile#>)
     OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID);
-//    OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID); //Open an existing audio file specified by a URL.
     if (status != noErr) {
         NSLog(@"打开文件失败 %@", url);
         return ;
@@ -61,35 +65,19 @@ const uint32_t CONST_UNIT_SIZE = 2048;
                                kAudioFilePropertyAudioDataPacketCount,
                                &size,
                                &packetNums);
-
     readedPacket = 0;
     
-    uint32_t bytes = 0, packets = (uint32_t)packetNums + 1;
-    totalBuffer = malloc(sizeof(Byte) * 20 * 1024 * 1024);
-    status = AudioFileReadPackets(audioFileID, NO, &bytes, NULL, 0, &packets, totalBuffer); // Reads packets of audio data from an audio file.
-    samplePosition = 0;
-    totalPoistion = bytes;
+    audioStreamPacketDescrption = malloc(sizeof(AudioStreamPacketDescription) * packetNums);
     
     NSAssert(status == noErr, ([NSString stringWithFormat:@"error status %d", status]) );
+    
+    audioConverter = NULL;
 }
 
 
 - (void)play {
     [self startRecorder:nil];
 }
-
-
-- (void)fillBuffer {
-    if (samplePosition + CONST_UNIT_SIZE > totalPoistion) {
-        buffList->mBuffers[0].mDataByteSize = totalPoistion - samplePosition;
-    }
-    else {
-        buffList->mBuffers[0].mDataByteSize = CONST_UNIT_SIZE;
-    }
-    memcpy(buffList->mBuffers[0].mData, totalBuffer + samplePosition, buffList->mBuffers[0].mDataByteSize);
-    samplePosition += buffList->mBuffers[0].mDataByteSize;
-}
-
 
 
 - (double)getCurrentTime {
@@ -102,13 +90,14 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 - (void)initRemoteIO {
     [self initAudioSession];
     
+    [self initAudioComponent];
+    
     [self initBuffer];
     
-    [self initAudioComponent];
+    [self initAudioProperty];
     
     [self initFormat];
     
-    [self initAudioProperty];
     
     [self initPlayCallback];
     OSStatus result = AudioUnitInitialize(audioUnit);
@@ -133,7 +122,7 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     
     buffList = (AudioBufferList *)malloc(sizeof(AudioBufferList));
     buffList->mNumberBuffers = 1;
-    buffList->mBuffers[0].mNumberChannels = 1;
+    buffList->mBuffers[0].mNumberChannels = 2;
     buffList->mBuffers[0].mDataByteSize = CONST_BUFFER_SIZE * sizeof(short);
     buffList->mBuffers[0].mData = malloc(sizeof(short) * 2048);
 }
@@ -152,58 +141,153 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 
 - (void)initFormat {
     AudioStreamBasicDescription audioFormat = audioStreamBasicDescrpition;
-//    audioFormat.mSampleRate = 44100;
-//    audioFormat.mFormatID = kAudioFormatLinearPCM;
-//    audioFormat.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
-//    audioFormat.mFramesPerPacket = 1;
-//    audioFormat.mChannelsPerFrame = 1;
-//    audioFormat.mBitsPerChannel = 16;
-//    audioFormat.mBytesPerPacket = 2;
-//    audioFormat.mBytesPerFrame = 2;
     
+    if (audioFormat.mFormatID == kAudioFormatMPEGLayer3) {
+        NSLog(@"ok");
+    }
     UInt32 outDataSize;
     Boolean outWritable;
     AudioUnitGetPropertyInfo(audioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, INPUT_BUS, &outDataSize, &outWritable);
-    NSLog(@"size:%d, able:%d", outDataSize, outWritable);
+    NSLog(@"size:%d, able:%d", (unsigned int)outDataSize, outWritable);
     
     AudioStreamBasicDescription outputFormat;
-    OSStatus status;
-    UInt32 outputSize = sizeof(outputFormat);
-    status =  AudioUnitGetProperty(audioUnit,
-                                   kAudioUnitProperty_StreamFormat,
-                                   kAudioUnitScope_Input,
-                                   OUTPUT_BUS,
-                                   &outputFormat,
-                                   &outputSize);
+    memset(&outputFormat, 0, sizeof(outputFormat));
+    outputFormat.mSampleRate       = 44100;
+    outputFormat.mFormatID         = kAudioFormatLinearPCM;
+    outputFormat.mFormatFlags      = kLinearPCMFormatFlagIsSignedInteger;
+    outputFormat.mBytesPerPacket   = 2;
+    outputFormat.mFramesPerPacket  = 1;
+    outputFormat.mBytesPerFrame    = 2;
+    outputFormat.mChannelsPerFrame = 1;
+    outputFormat.mBitsPerChannel   = 16;
+    
+    
+    OSStatus status = 0;
+
+    
     if (status != noErr) {
-        NSLog(@"AudioUnitGetProperty error, ret: %d", status);
+        NSLog(@"AudioUnitGetProperty error, ret: %d", (int)status);
     }
     
-    AudioUnitSetProperty(audioUnit,
-                         kAudioUnitProperty_StreamFormat,
-                         kAudioUnitScope_Output,
-                         INPUT_BUS,
-                         &audioFormat,
-                         sizeof(audioFormat));
+//    status = AudioUnitSetProperty(audioUnit,
+//                         kAudioUnitProperty_StreamFormat,
+//                         kAudioUnitScope_Input,
+//                         INPUT_BUS,
+//                         &audioFormat,
+//                         sizeof(audioFormat));
     
-    AudioUnitSetProperty(audioUnit,
-                         kAudioUnitProperty_StreamFormat,
-                         kAudioUnitScope_Input,
-                         OUTPUT_BUS,
-                         &audioFormat,
-                         sizeof(audioFormat));
+    AudioClassDescription *description = [self
+                                          getAudioClassDescriptionWithType:kAudioFormatMPEG4AAC
+                                          fromManufacturer:kAppleSoftwareAudioCodecManufacturer]; //软编
+    status = AudioConverterNew(&audioFormat, &outputFormat, &audioConverter);
     
-    // after set
-    status =  AudioUnitGetProperty(audioUnit,
-                                   kAudioUnitProperty_StreamFormat,
-                                   kAudioUnitScope_Input,
-                                   OUTPUT_BUS,
-                                   &outputFormat,
-                                   &outputSize);
+    UInt32 oldBitRate = 0;
+    UInt32 size = sizeof(oldBitRate);
+    status = AudioConverterGetProperty(audioConverter, kAudioConverterPropertyMinimumInputBufferSize, &size, &oldBitRate);
+    
+    status = AudioUnitSetProperty(audioUnit,
+                                  kAudioUnitProperty_StreamFormat,
+                                  kAudioUnitScope_Input,
+                                  OUTPUT_BUS,
+                                  &outputFormat,
+                                  sizeof(outputFormat));
+    
+    NSAssert(!status, @"设置属性失败");
+    
     if (status != noErr) {
         NSLog(@"AudioUnitGetProperty error, ret: %d", status);
     }
 }
+
+- (void)fillBuffer {
+    AudioStreamPacketDescription outPacketDescription = {0};
+//    outPacketDescription.mDataByteSize = 128;
+    
+    UInt32 ioOutputDataPacketSize = 1;
+    OSStatus status = AudioConverterFillComplexBuffer(audioConverter, lyInInputDataProc, (__bridge void *)self, &ioOutputDataPacketSize, buffList, NULL);
+    NSAssert(!status, @"转换格式失败");
+}
+
+/**
+ *  A callback function that supplies audio data to convert. This callback is invoked repeatedly as the converter is ready for new input data.
+ 
+ */
+OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberDataPackets, AudioBufferList *ioData, AudioStreamPacketDescription **outDataPacketDescription, void *inUserData)
+{
+    AACPlayer *player = (__bridge AACPlayer *)(inUserData);
+    UInt32 requestedPackets = *ioNumberDataPackets, bytes = 0;
+    Byte *buffer = malloc(2048);
+    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, *outDataPacketDescription, player->readedPacket, ioNumberDataPackets, buffer); // Reads packets of audio data from an audio file.
+    
+    if(status) {
+        NSLog(@"读取文件失败");
+    };
+    
+    if (ioNumberDataPackets > 0) {
+        ioData->mBuffers[0].mDataByteSize = bytes;
+        ioData->mBuffers[0].mData = buffer;
+        player->readedPacket += *ioNumberDataPackets;
+    }
+    
+    if (*ioNumberDataPackets < requestedPackets) {
+        //PCM 缓冲区还没满
+        *ioNumberDataPackets = 0;
+        return -1;
+    }
+    *ioNumberDataPackets = 1;
+    return noErr;
+}
+
+/**
+ *  获取编解码器
+ *
+ *  @param type         编码格式
+ *  @param manufacturer 软/硬编
+ *
+ 编解码器（codec）指的是一个能够对一个信号或者一个数据流进行变换的设备或者程序。这里指的变换既包括将 信号或者数据流进行编码（通常是为了传输、存储或者加密）或者提取得到一个编码流的操作，也包括为了观察或者处理从这个编码流中恢复适合观察或操作的形式的操作。编解码器经常用在视频会议和流媒体等应用中。
+ *  @return 指定编码器
+ */
+- (AudioClassDescription *)getAudioClassDescriptionWithType:(UInt32)type
+                                           fromManufacturer:(UInt32)manufacturer
+{
+    static AudioClassDescription desc;
+    
+    UInt32 encoderSpecifier = type;
+    OSStatus st;
+    
+    UInt32 size;
+    st = AudioFormatGetPropertyInfo(kAudioFormatProperty_Encoders,
+                                    sizeof(encoderSpecifier),
+                                    &encoderSpecifier,
+                                    &size);
+    if (st) {
+        NSLog(@"error getting audio format propery info: %d", (int)(st));
+        return nil;
+    }
+    
+    unsigned int count = size / sizeof(AudioClassDescription);
+    AudioClassDescription descriptions[count];
+    st = AudioFormatGetProperty(kAudioFormatProperty_Encoders,
+                                sizeof(encoderSpecifier),
+                                &encoderSpecifier,
+                                &size,
+                                descriptions);
+    if (st) {
+        NSLog(@"error getting audio format propery: %d", (int)(st));
+        return nil;
+    }
+    
+    for (unsigned int i = 0; i < count; i++) {
+        if ((type == descriptions[i].mSubType) &&
+            (manufacturer == descriptions[i].mManufacturer)) {
+            memcpy(&desc, &(descriptions[i]), sizeof(desc));
+            return &desc;
+        }
+    }
+    
+    return nil;
+}
+
 
 
 - (void)initPlayCallback {
@@ -219,21 +303,29 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 }
 
 - (void)initAudioProperty {
-    UInt32 flag = 1;
+    UInt32 flag = 0;
+    OSStatus status = 0;
+    if (flag) {
+        status = AudioUnitSetProperty(audioUnit,
+                                      kAudioOutputUnitProperty_EnableIO,
+                                      kAudioUnitScope_Input,
+                                      INPUT_BUS,
+                                      &flag,
+                                      sizeof(flag));
+    }
     
-    AudioUnitSetProperty(audioUnit,
-                         kAudioOutputUnitProperty_EnableIO,
-                         kAudioUnitScope_Input,
-                         INPUT_BUS,
-                         &flag,
-                         sizeof(flag));
+    flag = 1;
+    if (flag) {
+        status = AudioUnitSetProperty(audioUnit,
+                                      kAudioOutputUnitProperty_EnableIO,
+                                      kAudioUnitScope_Output,
+                                      OUTPUT_BUS,
+                                      &flag,
+                                      sizeof(flag));
+    }
     
-    AudioUnitSetProperty(audioUnit,
-                         kAudioOutputUnitProperty_EnableIO,
-                         kAudioUnitScope_Input,
-                         OUTPUT_BUS,
-                         &flag,
-                         sizeof(flag));
+    
+    NSLog(@"status %d", status);
     
 }
 
@@ -248,9 +340,8 @@ static OSStatus PlayCallback(void *inRefCon,
                              AudioBufferList *ioData) {
     AACPlayer *player = (__bridge AACPlayer *)inRefCon;
     [player fillBuffer];
-    memcpy(ioData->mBuffers[0].mData, player->buffList->mBuffers[0].mData, player->buffList->mBuffers[0].mDataByteSize);
     NSLog(@"out size: %d", player->buffList->mBuffers[0].mDataByteSize);
-    AudioUnitRender(player->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, player->buffList);
+    OSStatus status = AudioUnitRender(player->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, player->buffList);
     
     if (player->buffList->mBuffers[0].mDataByteSize <= 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -290,9 +381,6 @@ static OSStatus PlayCallback(void *inRefCon,
 #pragma mark - private
 
 - (void)audio_release {
-    //    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    //    AudioOutputUnitStop(audioUnit);
-    //    AudioComponentInstanceDispose(audioUnit);
     AudioUnitUninitialize(audioUnit);
     if (buffList != NULL) {
         free(buffList);
@@ -309,6 +397,8 @@ static OSStatus PlayCallback(void *inRefCon,
         buffList = NULL;
     }
     AudioUnitUninitialize(audioUnit);
+    
+    AudioConverterDispose(audioConverter);
 }
 
 
