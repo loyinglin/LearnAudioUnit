@@ -56,7 +56,6 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID);
     if (status) {
         NSLog(@"打开文件失败 %@", url);
-        assert(@"");
     }
     uint32_t size = sizeof(AudioStreamBasicDescription);
     status = AudioFileGetProperty(audioFileID, kAudioFilePropertyDataFormat, &size, &audioFileFormat); // Gets the value of an audio file property.
@@ -169,6 +168,8 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 //    audioFormat.mBitsPerChannel = 0; // 压缩格式设置为0
 //    audioFormat.mReserved = 0; // 8字节对齐，填0.
     
+    [self printAudioStreamBasicDescription:audioFileFormat];
+    [self printAudioStreamBasicDescription:outputFormat];
     status = AudioConverterNew(&audioFileFormat, &outputFormat, &audioConverter);
     if (status) {
         NSLog(@"AudioConverterNew eror with status:%d", status);
@@ -205,27 +206,27 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
         NSLog(@"sdfas");
     }
     
-    UInt32 byteSize = 0;
-    AudioStreamPacketDescription *packetDesc = player->audioPacketFormat + player->readedPacket;
-    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &byteSize, packetDesc, player->readedPacket, ioNumberDataPackets, player->convertBuffer); // Reads packets of audio data from an audio file.
+    UInt32 byteSize = CONST_BUFFER_SIZE;
+
+    OSStatus status = AudioFileReadPacketData(player->audioFileID, NO, &byteSize, player->audioPacketFormat, player->readedPacket, ioNumberDataPackets, player->convertBuffer); // Reads packets of audio data from an audio file.
     
     if (outDataPacketDescription) {
-        *outDataPacketDescription = packetDesc;
+        *outDataPacketDescription = player->audioPacketFormat;
     }
     
     
     if(status) {
-        assert(@"读取文件失败");
-    };
+        NSLog(@"读取文件失败");
+    }
     
-    if (ioNumberDataPackets > 0) {
+    if (!status && ioNumberDataPackets > 0) {
         ioData->mBuffers[0].mDataByteSize = byteSize;
         ioData->mBuffers[0].mData = player->convertBuffer;
         player->readedPacket += *ioNumberDataPackets;
         return noErr;
     }
     else {
-        return -1; // NoMoreData
+        return -12306; // NoMoreData
     }
     
 }
@@ -244,8 +245,8 @@ static OSStatus PlayCallback(void *inRefCon,
     outPacketDescription.mStartOffset = 0;
     outPacketDescription.mVariableFramesInPacket = 0;
 
-    
-    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, &outPacketDescription);
+    player->buffList->mBuffers[0].mDataByteSize = CONST_BUFFER_SIZE;
+    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, NULL);
     
     if (status) {
         NSLog(@"转换格式失败 %d", status);
@@ -329,4 +330,19 @@ static OSStatus PlayCallback(void *inRefCon,
 }
 
 
+- (void)printAudioStreamBasicDescription:(AudioStreamBasicDescription)asbd {
+    char formatID[5];
+    UInt32 mFormatID = CFSwapInt32HostToBig(asbd.mFormatID);
+    bcopy (&mFormatID, formatID, 4);
+    formatID[4] = '\0';
+    printf("Sample Rate:         %10.0f\n",  asbd.mSampleRate);
+    printf("Format ID:           %10s\n",    formatID);
+    printf("Format Flags:        %10X\n",    (unsigned int)asbd.mFormatFlags);
+    printf("Bytes per Packet:    %10d\n",    (unsigned int)asbd.mBytesPerPacket);
+    printf("Frames per Packet:   %10d\n",    (unsigned int)asbd.mFramesPerPacket);
+    printf("Bytes per Frame:     %10d\n",    (unsigned int)asbd.mBytesPerFrame);
+    printf("Channels per Frame:  %10d\n",    (unsigned int)asbd.mChannelsPerFrame);
+    printf("Bits per Channel:    %10d\n",    (unsigned int)asbd.mBitsPerChannel);
+    printf("\n");
+}
 @end
