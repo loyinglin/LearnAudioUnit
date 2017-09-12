@@ -17,7 +17,7 @@
 		FD315B921D77F89E000CC96D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FD315B901D77F89E000CC96D /* LaunchScreen.storyboard */; };
 		FD315B9D1D77F89E000CC96D /* LearnVideoToolBoxTests.m in Sources */ = {isa = PBXBuildFile; fileRef = FD315B9C1D77F89E000CC96D /* LearnVideoToolBoxTests.m */; };
 		FD315BA81D7803DC000CC96D /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD315BA71D7803DC000CC96D /* VideoToolbox.framework */; };
-		FDDA90851F5EBD95006A7C01 /* sabine.pcm in Resources */ = {isa = PBXBuildFile; fileRef = FDDA90841F5EBD95006A7C01 /* sabine.pcm */; };
+		FDDA90851F5EBD95006A7C01 /* abc.pcm in Resources */ = {isa = PBXBuildFile; fileRef = FDDA90841F5EBD95006A7C01 /* abc.pcm */; };
 		FDDA90871F5ECE65006A7C01 /* abc.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDDA90861F5ECE65006A7C01 /* abc.mp3 */; };
 /* End PBXBuildFile section */
 
@@ -49,7 +49,7 @@
 		FD315B9C1D77F89E000CC96D /* LearnVideoToolBoxTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LearnVideoToolBoxTests.m; sourceTree = "<group>"; };
 		FD315B9E1D77F89E000CC96D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FD315BA71D7803DC000CC96D /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
-		FDDA90841F5EBD95006A7C01 /* sabine.pcm */ = {isa = PBXFileReference; lastKnownFileType = file; path = sabine.pcm; sourceTree = "<group>"; };
+		FDDA90841F5EBD95006A7C01 /* abc.pcm */ = {isa = PBXFileReference; lastKnownFileType = file; path = abc.pcm; sourceTree = "<group>"; };
 		FDDA90861F5ECE65006A7C01 /* abc.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = abc.mp3; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -95,7 +95,7 @@
 			isa = PBXGroup;
 			children = (
 				FDDA90861F5ECE65006A7C01 /* abc.mp3 */,
-				FDDA90841F5EBD95006A7C01 /* sabine.pcm */,
+				FDDA90841F5EBD95006A7C01 /* abc.pcm */,
 				FD037A6F1D8247F400FD62FA /* abc.aac */,
 				FD315B851D77F89E000CC96D /* AppDelegate.h */,
 				FD315B861D77F89E000CC96D /* AppDelegate.m */,
@@ -210,7 +210,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FDDA90851F5EBD95006A7C01 /* sabine.pcm in Resources */,
+				FDDA90851F5EBD95006A7C01 /* abc.pcm in Resources */,
 				FD037A701D8247F400FD62FA /* abc.aac in Resources */,
 				FD315B921D77F89E000CC96D /* LaunchScreen.storyboard in Resources */,
 				FDDA90871F5ECE65006A7C01 /* abc.mp3 in Resources */,

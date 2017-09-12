@@ -122,9 +122,9 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     
     buffList = (AudioBufferList *)malloc(sizeof(AudioBufferList));
     buffList->mNumberBuffers = 1;
-    buffList->mBuffers[0].mNumberChannels = 2;
-    buffList->mBuffers[0].mDataByteSize = CONST_BUFFER_SIZE * sizeof(short);
-    buffList->mBuffers[0].mData = malloc(sizeof(short) * 2048);
+    buffList->mBuffers[0].mNumberChannels = 1;
+    buffList->mBuffers[0].mDataByteSize = CONST_BUFFER_SIZE;
+    buffList->mBuffers[0].mData = malloc(CONST_BUFFER_SIZE);
 }
 
 - (void)initAudioComponent {
@@ -176,16 +176,16 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 //                         &audioFormat,
 //                         sizeof(audioFormat));
     
-    AudioClassDescription *description = [self
-                                          getAudioClassDescriptionWithType:kAudioFormatMPEG4AAC
-                                          fromManufacturer:kAppleSoftwareAudioCodecManufacturer]; //软编
+//    AudioClassDescription *description = [self
+//                                          getAudioClassDescriptionWithType:kAudioFormatMPEG4AAC
+//                                          fromManufacturer:kAppleSoftwareAudioCodecManufacturer]; //软编
     status = AudioConverterNew(&audioFormat, &outputFormat, &audioConverter);
     
     UInt32 oldBitRate = 0;
     UInt32 size = sizeof(oldBitRate);
-    status = AudioConverterGetProperty(audioConverter, kAudioConverterPropertyMinimumInputBufferSize, &size, &oldBitRate);
+    status = AudioConverterGetProperty(audioConverter, kAudioConverterEncodeBitRate, &size, &oldBitRate);
     
-    status = AudioUnitSetProperty(audioUnit,
+   status = AudioUnitSetProperty(audioUnit,
                                   kAudioUnitProperty_StreamFormat,
                                   kAudioUnitScope_Input,
                                   OUTPUT_BUS,
@@ -199,15 +199,6 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     }
 }
 
-- (void)fillBuffer {
-    AudioStreamPacketDescription outPacketDescription = {0};
-//    outPacketDescription.mDataByteSize = 128;
-    
-    UInt32 ioOutputDataPacketSize = 1;
-    OSStatus status = AudioConverterFillComplexBuffer(audioConverter, lyInInputDataProc, (__bridge void *)self, &ioOutputDataPacketSize, buffList, NULL);
-    NSAssert(!status, @"转换格式失败");
-}
-
 /**
  *  A callback function that supplies audio data to convert. This callback is invoked repeatedly as the converter is ready for new input data.
  
@@ -217,7 +208,9 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
     AACPlayer *player = (__bridge AACPlayer *)(inUserData);
     UInt32 requestedPackets = *ioNumberDataPackets, bytes = 0;
     Byte *buffer = malloc(2048);
-    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, *outDataPacketDescription, player->readedPacket, ioNumberDataPackets, buffer); // Reads packets of audio data from an audio file.
+    AudioStreamPacketDescription *tmpPacketDescription = malloc(sizeof(AudioStreamPacketDescription));
+    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, tmpPacketDescription, player->readedPacket, ioNumberDataPackets, buffer); // Reads packets of audio data from an audio file.
+    *outDataPacketDescription = tmpPacketDescription;
     
     if(status) {
         NSLog(@"读取文件失败");
@@ -235,6 +228,38 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
         return -1;
     }
     *ioNumberDataPackets = 1;
+    return noErr;
+}
+
+static OSStatus PlayCallback(void *inRefCon,
+                             AudioUnitRenderActionFlags *ioActionFlags,
+                             const AudioTimeStamp *inTimeStamp,
+                             UInt32 inBusNumber,
+                             UInt32 inNumberFrames,
+                             AudioBufferList *ioData) {
+    AACPlayer *player = (__bridge AACPlayer *)inRefCon;
+    AudioStreamPacketDescription outPacketDescription = {0};
+    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, &outPacketDescription);
+    
+    if (status) {
+        NSLog(@"转换格式失败 %d", status);
+    }
+    
+    NSLog(@"out size: %d", player->buffList->mBuffers[0].mDataByteSize);
+    memcpy(ioData->mBuffers[0].mData, player->buffList->mBuffers[0].mData, player->buffList->mBuffers[0].mDataByteSize);
+    ioData->mBuffers[0].mDataByteSize = player->buffList->mBuffers[0].mDataByteSize;
+
+    //    OSStatus status = AudioUnitRender(player->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, player->buffList);
+//    if (status) {
+//        NSLog(@"status %d", status);
+//    }
+    
+    if (player->buffList->mBuffers[0].mDataByteSize <= 0) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [player stopRecorder:nil];
+        });
+        
+    }
     return noErr;
 }
 
@@ -332,25 +357,6 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
 #pragma mark - callback function
 
 
-static OSStatus PlayCallback(void *inRefCon,
-                             AudioUnitRenderActionFlags *ioActionFlags,
-                             const AudioTimeStamp *inTimeStamp,
-                             UInt32 inBusNumber,
-                             UInt32 inNumberFrames,
-                             AudioBufferList *ioData) {
-    AACPlayer *player = (__bridge AACPlayer *)inRefCon;
-    [player fillBuffer];
-    NSLog(@"out size: %d", player->buffList->mBuffers[0].mDataByteSize);
-    OSStatus status = AudioUnitRender(player->audioUnit, ioActionFlags, inTimeStamp, 1, inNumberFrames, player->buffList);
-    
-    if (player->buffList->mBuffers[0].mDataByteSize <= 0) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [player stopRecorder:nil];
-        });
-        
-    }
-    return noErr;
-}
 
 #pragma mark - public methods
 
