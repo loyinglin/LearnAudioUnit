@@ -49,7 +49,7 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 }
 
 - (void)customAudioConfig {
-    NSURL *url = [[NSBundle mainBundle] URLForResource:@"abc" withExtension:@"aac"];
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"test" withExtension:@"mp3"];
     
     OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID);
     if (status != noErr) {
@@ -208,9 +208,8 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
     AACPlayer *player = (__bridge AACPlayer *)(inUserData);
     UInt32 requestedPackets = *ioNumberDataPackets, bytes = 0;
     Byte *buffer = malloc(2048);
-    AudioStreamPacketDescription *tmpPacketDescription = malloc(sizeof(AudioStreamPacketDescription));
-    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, tmpPacketDescription, player->readedPacket, ioNumberDataPackets, buffer); // Reads packets of audio data from an audio file.
-    *outDataPacketDescription = tmpPacketDescription;
+    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, player->audioStreamPacketDescrption, player->readedPacket, ioNumberDataPackets, buffer); // Reads packets of audio data from an audio file.
+    *outDataPacketDescription = player->audioStreamPacketDescrption;
     
     if(status) {
         NSLog(@"读取文件失败");
@@ -223,11 +222,8 @@ OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberD
     }
     
     if (*ioNumberDataPackets < requestedPackets) {
-        //PCM 缓冲区还没满
-        *ioNumberDataPackets = 0;
-        return -1;
+        NSLog(@"not enough data");
     }
-    *ioNumberDataPackets = 1;
     return noErr;
 }
 
@@ -238,8 +234,7 @@ static OSStatus PlayCallback(void *inRefCon,
                              UInt32 inNumberFrames,
                              AudioBufferList *ioData) {
     AACPlayer *player = (__bridge AACPlayer *)inRefCon;
-    AudioStreamPacketDescription outPacketDescription = {0};
-    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, &outPacketDescription);
+    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, NULL);
     
     if (status) {
         NSLog(@"转换格式失败 %d", status);
@@ -373,15 +368,6 @@ static OSStatus PlayCallback(void *inRefCon,
     isPlaying = NO;
     AudioOutputUnitStop(audioUnit);
     [self audio_release];
-}
-
-- (void)writePCMData:(Byte *)buffer size:(int)size {
-    static FILE *file = NULL;
-    NSString *path = [NSTemporaryDirectory() stringByAppendingString:@"/test.pcm"];
-    if (!file) {
-        file = fopen(path.UTF8String, "w");
-    }
-    fwrite(buffer, size, 1, file);
 }
 
 #pragma mark - private
