@@ -29,6 +29,8 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     
     AudioUnit audioUnit;
     AudioBufferList *buffList;
+    Byte *convertBuffer;
+    
     
     Byte    *totalBuffer;
     UInt32  samplePosition;
@@ -49,16 +51,16 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 }
 
 - (void)customAudioConfig {
-    NSURL *url = [[NSBundle mainBundle] URLForResource:@"abc" withExtension:@"mp3"];
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"abc" withExtension:@"aac"];
     
     OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID);
-    if (status != noErr) {
+    if (status) {
         NSLog(@"打开文件失败 %@", url);
-        return ;
+        assert(@"");
     }
     uint32_t size = sizeof(AudioStreamBasicDescription);
     status = AudioFileGetProperty(audioFileID, kAudioFilePropertyDataFormat, &size, &audioFileFormat); // Gets the value of an audio file property.
-    NSAssert(status == noErr, @"error");
+    NSAssert(status == noErr, ([NSString stringWithFormat:@"error status %d", status]) );
     
     size = sizeof(packetNums); //type is UInt32
     status = AudioFileGetProperty(audioFileID,
@@ -68,7 +70,6 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     readedPacket = 0;
     
     audioPacketFormat = malloc(sizeof(AudioStreamPacketDescription) * packetNums);
-    
     NSAssert(status == noErr, ([NSString stringWithFormat:@"error status %d", status]) );
     
     audioConverter = NULL;
@@ -125,6 +126,9 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     buffList->mBuffers[0].mData = malloc(CONST_BUFFER_SIZE);
     
     
+    convertBuffer = malloc(CONST_BUFFER_SIZE);
+    
+    
     //initAudioProperty
     
     flag = 1;
@@ -152,6 +156,18 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     outputFormat.mBytesPerFrame    = 2;
     outputFormat.mChannelsPerFrame = 1;
     outputFormat.mBitsPerChannel   = 16;
+    
+    
+//    AudioStreamBasicDescription audioFormat = {0}; // 初始化输出流的结构体描述为0. 很重要。
+//    audioFormat.mSampleRate = 44100; // 音频流，在正常播放情况下的帧率。如果是压缩的格式，这个属性表示解压缩后的帧率。帧率不能为0。
+//    audioFormat.mFormatID = kAudioFormatMPEG4AAC; // 设置编码格式
+//    audioFormat.mFormatFlags = kMPEG4Object_AAC_LC; // 无损编码 ，0表示没有
+//    audioFormat.mBytesPerPacket = 0; // 每一个packet的音频数据大小。如果的动态大小，设置为0。动态大小的格式，需要用AudioStreamPacketDescription 来确定每个packet的大小。
+//    audioFormat.mFramesPerPacket = 1024; // 每个packet的帧数。如果是未压缩的音频数据，值是1。动态码率格式，这个值是一个较大的固定数字，比如说AAC的1024。如果是动态大小帧数（比如Ogg格式）设置为0。
+//    audioFormat.mBytesPerFrame = 0; //  每帧的大小。每一帧的起始点到下一帧的起始点。如果是压缩格式，设置为0 。
+//    audioFormat.mChannelsPerFrame = 1; // 声道数
+//    audioFormat.mBitsPerChannel = 0; // 压缩格式设置为0
+//    audioFormat.mReserved = 0; // 8字节对齐，填0.
     
     status = AudioConverterNew(&audioFileFormat, &outputFormat, &audioConverter);
     if (status) {
@@ -183,21 +199,35 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberDataPackets, AudioBufferList *ioData, AudioStreamPacketDescription **outDataPacketDescription, void *inUserData)
 {
     AACPlayer *player = (__bridge AACPlayer *)(inUserData);
-    UInt32 bytes = 0;
-    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &bytes, player->audioPacketFormat, player->readedPacket, ioNumberDataPackets, player->buffList->mBuffers[0].mData); // Reads packets of audio data from an audio file.
-    *outDataPacketDescription = player->audioPacketFormat;
+    
+    
+    if (*ioNumberDataPackets != 1) {
+        NSLog(@"sdfas");
+    }
+    
+    UInt32 byteSize = 0;
+    AudioStreamPacketDescription *packetDesc = player->audioPacketFormat + player->readedPacket;
+    OSStatus status = AudioFileReadPackets(player->audioFileID, NO, &byteSize, packetDesc, player->readedPacket, ioNumberDataPackets, player->convertBuffer); // Reads packets of audio data from an audio file.
+    
+    if (outDataPacketDescription) {
+        *outDataPacketDescription = packetDesc;
+    }
+    
     
     if(status) {
-        NSLog(@"读取文件失败");
+        assert(@"读取文件失败");
     };
     
     if (ioNumberDataPackets > 0) {
-        ioData->mBuffers[0].mDataByteSize = bytes;
-        ioData->mBuffers[0].mData = player->buffList->mBuffers[0].mData;
+        ioData->mBuffers[0].mDataByteSize = byteSize;
+        ioData->mBuffers[0].mData = player->convertBuffer;
         player->readedPacket += *ioNumberDataPackets;
+        return noErr;
+    }
+    else {
+        return -1; // NoMoreData
     }
     
-    return noErr;
 }
 
 static OSStatus PlayCallback(void *inRefCon,
@@ -207,7 +237,15 @@ static OSStatus PlayCallback(void *inRefCon,
                              UInt32 inNumberFrames,
                              AudioBufferList *ioData) {
     AACPlayer *player = (__bridge AACPlayer *)inRefCon;
-    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, NULL);
+//    AudioStreamPacketDescription packetFormat = {0};
+    AudioStreamPacketDescription outPacketDescription;
+    memset(&outPacketDescription, 0, sizeof(AudioStreamPacketDescription));
+    outPacketDescription.mDataByteSize = 128;
+    outPacketDescription.mStartOffset = 0;
+    outPacketDescription.mVariableFramesInPacket = 0;
+
+    
+    OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, &outPacketDescription);
     
     if (status) {
         NSLog(@"转换格式失败 %d", status);
@@ -216,7 +254,8 @@ static OSStatus PlayCallback(void *inRefCon,
     NSLog(@"out size: %d", player->buffList->mBuffers[0].mDataByteSize);
     memcpy(ioData->mBuffers[0].mData, player->buffList->mBuffers[0].mData, player->buffList->mBuffers[0].mDataByteSize);
     ioData->mBuffers[0].mDataByteSize = player->buffList->mBuffers[0].mDataByteSize;
-
+    
+    fwrite(player->buffList->mBuffers[0].mData, player->buffList->mBuffers[0].mDataByteSize, 1, [player pcmFile]);
     
     if (player->buffList->mBuffers[0].mDataByteSize <= 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -226,6 +265,23 @@ static OSStatus PlayCallback(void *inRefCon,
     }
     return noErr;
 }
+
+
+
+
+
+
+
+- (FILE *)pcmFile {
+    static FILE *_pcmFile;
+    if (!_pcmFile) {
+        NSString *filePath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"test.pcm"];
+        _pcmFile = fopen(filePath.UTF8String, "w");
+        
+    }
+    return _pcmFile;
+}
+
 
 - (void)initPlayCallback {
     AURenderCallbackStruct playCallback;
