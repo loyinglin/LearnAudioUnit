@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		FD037A701D8247F400FD62FA /* abc.aac in Resources */ = {isa = PBXBuildFile; fileRef = FD037A6F1D8247F400FD62FA /* abc.aac */; };
-		FD0B8E281D82A7CD001906B0 /* AACPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = FD0B8E271D82A7CD001906B0 /* AACPlayer.m */; };
 		FD315B841D77F89E000CC96D /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FD315B831D77F89E000CC96D /* main.m */; };
 		FD315B871D77F89E000CC96D /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FD315B861D77F89E000CC96D /* AppDelegate.m */; };
 		FD315B8A1D77F89E000CC96D /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FD315B891D77F89E000CC96D /* ViewController.m */; };
@@ -19,6 +18,7 @@
 		FD315BA81D7803DC000CC96D /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD315BA71D7803DC000CC96D /* VideoToolbox.framework */; };
 		FDD46F481F67859500699A3B /* test.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDD46F471F67859500699A3B /* test.mp3 */; };
 		FDD46F5F1F67D06400699A3B /* abc.m4a in Resources */ = {isa = PBXBuildFile; fileRef = FDD46F5E1F67D06400699A3B /* abc.m4a */; };
+		FDD46F6A1F68C3D000699A3B /* LYPlayer.m in Sources */ = {isa = PBXBuildFile; fileRef = FDD46F691F68C3D000699A3B /* LYPlayer.m */; };
 		FDDA90851F5EBD95006A7C01 /* abc.pcm in Resources */ = {isa = PBXBuildFile; fileRef = FDDA90841F5EBD95006A7C01 /* abc.pcm */; };
 		FDDA90871F5ECE65006A7C01 /* abc.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = FDDA90861F5ECE65006A7C01 /* abc.mp3 */; };
 /* End PBXBuildFile section */
@@ -35,8 +35,6 @@
 
 /* Begin PBXFileReference section */
 		FD037A6F1D8247F400FD62FA /* abc.aac */ = {isa = PBXFileReference; lastKnownFileType = file; path = abc.aac; sourceTree = "<group>"; };
-		FD0B8E261D82A7CD001906B0 /* AACPlayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AACPlayer.h; sourceTree = "<group>"; };
-		FD0B8E271D82A7CD001906B0 /* AACPlayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = AACPlayer.m; sourceTree = "<group>"; };
 		FD315B7F1D77F89E000CC96D /* LearnVideoToolBox.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LearnVideoToolBox.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FD315B831D77F89E000CC96D /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		FD315B851D77F89E000CC96D /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
@@ -53,6 +51,8 @@
 		FD315BA71D7803DC000CC96D /* VideoToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = VideoToolbox.framework; path = System/Library/Frameworks/VideoToolbox.framework; sourceTree = SDKROOT; };
 		FDD46F471F67859500699A3B /* test.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = test.mp3; sourceTree = "<group>"; };
 		FDD46F5E1F67D06400699A3B /* abc.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = abc.m4a; sourceTree = "<group>"; };
+		FDD46F681F68C3D000699A3B /* LYPlayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = LYPlayer.h; sourceTree = "<group>"; };
+		FDD46F691F68C3D000699A3B /* LYPlayer.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = LYPlayer.m; sourceTree = "<group>"; };
 		FDDA90841F5EBD95006A7C01 /* abc.pcm */ = {isa = PBXFileReference; lastKnownFileType = file; path = abc.pcm; sourceTree = "<group>"; };
 		FDDA90861F5ECE65006A7C01 /* abc.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = abc.mp3; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -105,8 +105,8 @@
 				FD037A6F1D8247F400FD62FA /* abc.aac */,
 				FD315B851D77F89E000CC96D /* AppDelegate.h */,
 				FD315B861D77F89E000CC96D /* AppDelegate.m */,
-				FD0B8E261D82A7CD001906B0 /* AACPlayer.h */,
-				FD0B8E271D82A7CD001906B0 /* AACPlayer.m */,
+				FDD46F681F68C3D000699A3B /* LYPlayer.h */,
+				FDD46F691F68C3D000699A3B /* LYPlayer.m */,
 				FD315B881D77F89E000CC96D /* ViewController.h */,
 				FD315B891D77F89E000CC96D /* ViewController.m */,
 				FD315B8B1D77F89E000CC96D /* Main.storyboard */,
@@ -241,8 +241,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FD0B8E281D82A7CD001906B0 /* AACPlayer.m in Sources */,
 				FD315B8A1D77F89E000CC96D /* ViewController.m in Sources */,
+				FDD46F6A1F68C3D000699A3B /* LYPlayer.m in Sources */,
 				FD315B871D77F89E000CC96D /* AppDelegate.m in Sources */,
 				FD315B841D77F89E000CC96D /* main.m in Sources */,
 			);

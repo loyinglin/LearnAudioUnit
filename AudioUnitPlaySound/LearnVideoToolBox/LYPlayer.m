@@ -1,28 +1,26 @@
 //
-//  AACPlayer.m
+//  LYPlayer.m
 //  LearnVideoToolBox
 //
-//  Created by 林伟池 on 16/9/9.
-//  Copyright © 2016年 林伟池. All rights reserved.
+//  Created by loyinglin on 2017/9/13.
+//  Copyright © 2017年 林伟池. All rights reserved.
 //
 
-#import "AACPlayer.h"
+#import "LYPlayer.h"
 #import <AudioUnit/AudioUnit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <assert.h>
 
 const uint32_t CONST_BUFFER_SIZE = 0x10000;
-const uint32_t CONST_UNIT_SIZE = 2048;
 
 #define INPUT_BUS 1
 #define OUTPUT_BUS 0
 
-@implementation AACPlayer
+@implementation LYPlayer
 {
     AudioFileID audioFileID; // An opaque data type that represents an audio file object.
     AudioStreamBasicDescription audioFileFormat; // An audio data format specification for a stream of audio
     AudioStreamPacketDescription *audioPacketFormat;
-    
     
     SInt64 readedPacket; //参数类型
     UInt64 packetNums;
@@ -30,14 +28,6 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     AudioUnit audioUnit;
     AudioBufferList *buffList;
     Byte *convertBuffer;
-    
-    
-    Byte    *totalBuffer;
-    UInt32  samplePosition;
-    UInt32  totalPoistion;
-    
-    BOOL isPlaying;
-    
     
     AudioConverterRef audioConverter;
 }
@@ -51,21 +41,21 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 }
 
 - (void)customAudioConfig {
-    NSURL *url = [[NSBundle mainBundle] URLForResource:@"abc" withExtension:@"aac"];
-    
+    NSURL *url = [[NSBundle mainBundle] URLForResource:@"test" withExtension:@"mp3"];
     OSStatus status = AudioFileOpenURL((__bridge CFURLRef)url, kAudioFileReadPermission, 0, &audioFileID);
     if (status) {
         NSLog(@"打开文件失败 %@", url);
     }
+    
     uint32_t size = sizeof(AudioStreamBasicDescription);
-    status = AudioFileGetProperty(audioFileID, kAudioFilePropertyDataFormat, &size, &audioFileFormat); // Gets the value of an audio file property.
+    status = AudioFileGetProperty(audioFileID, kAudioFilePropertyDataFormat, &size, &audioFileFormat); // 读取文件格式
     NSAssert(status == noErr, ([NSString stringWithFormat:@"error status %d", status]) );
     
-    size = sizeof(packetNums); //type is UInt32
+    size = sizeof(packetNums);
     status = AudioFileGetProperty(audioFileID,
-                               kAudioFilePropertyAudioDataPacketCount,
-                               &size,
-                               &packetNums);
+                                  kAudioFilePropertyAudioDataPacketCount,
+                                  &size,
+                                  &packetNums);
     readedPacket = 0;
     
     audioPacketFormat = malloc(sizeof(AudioStreamPacketDescription) * packetNums);
@@ -76,21 +66,19 @@ const uint32_t CONST_UNIT_SIZE = 2048;
 
 
 - (void)play {
-    isPlaying = YES;
-    
-    [ self initRemoteIO];
+    [self initPlayer];
     AudioOutputUnitStart(audioUnit);
 }
 
 
 - (double)getCurrentTime {
-    Float64 timeInterval = (readedPacket * 1.0) / 1;
+    Float64 timeInterval = (readedPacket * 1.0) / packetNums;
     return timeInterval;
 }
 
 
 
-- (void)initRemoteIO {
+- (void)initPlayer {
     NSError *error = nil;
     OSStatus status = noErr;
     
@@ -108,7 +96,7 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     
     AudioComponent inputComponent = AudioComponentFindNext(NULL, &audioDesc);
     AudioComponentInstanceNew(inputComponent, &audioUnit);
-
+    
     // BUFFER
     UInt32 flag = 0;
     AudioUnitSetProperty(audioUnit,
@@ -156,18 +144,6 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     outputFormat.mChannelsPerFrame = 1;
     outputFormat.mBitsPerChannel   = 16;
     
-    
-//    AudioStreamBasicDescription audioFormat = {0}; // 初始化输出流的结构体描述为0. 很重要。
-//    audioFormat.mSampleRate = 44100; // 音频流，在正常播放情况下的帧率。如果是压缩的格式，这个属性表示解压缩后的帧率。帧率不能为0。
-//    audioFormat.mFormatID = kAudioFormatMPEG4AAC; // 设置编码格式
-//    audioFormat.mFormatFlags = kMPEG4Object_AAC_LC; // 无损编码 ，0表示没有
-//    audioFormat.mBytesPerPacket = 0; // 每一个packet的音频数据大小。如果的动态大小，设置为0。动态大小的格式，需要用AudioStreamPacketDescription 来确定每个packet的大小。
-//    audioFormat.mFramesPerPacket = 1024; // 每个packet的帧数。如果是未压缩的音频数据，值是1。动态码率格式，这个值是一个较大的固定数字，比如说AAC的1024。如果是动态大小帧数（比如Ogg格式）设置为0。
-//    audioFormat.mBytesPerFrame = 0; //  每帧的大小。每一帧的起始点到下一帧的起始点。如果是压缩格式，设置为0 。
-//    audioFormat.mChannelsPerFrame = 1; // 声道数
-//    audioFormat.mBitsPerChannel = 0; // 压缩格式设置为0
-//    audioFormat.mReserved = 0; // 8字节对齐，填0.
-    
     [self printAudioStreamBasicDescription:audioFileFormat];
     [self printAudioStreamBasicDescription:outputFormat];
     status = AudioConverterNew(&audioFileFormat, &outputFormat, &audioConverter);
@@ -193,22 +169,12 @@ const uint32_t CONST_UNIT_SIZE = 2048;
     NSLog(@"result %d", result);
 }
 
-/**
- *  A callback function that supplies audio data to convert. This callback is invoked repeatedly as the converter is ready for new input data.
- 
- */
 OSStatus lyInInputDataProc(AudioConverterRef inAudioConverter, UInt32 *ioNumberDataPackets, AudioBufferList *ioData, AudioStreamPacketDescription **outDataPacketDescription, void *inUserData)
 {
-    AACPlayer *player = (__bridge AACPlayer *)(inUserData);
-    
-    
-    if (*ioNumberDataPackets != 1) {
-        NSLog(@"sdfas");
-    }
+    LYPlayer *player = (__bridge LYPlayer *)(inUserData);
     
     UInt32 byteSize = CONST_BUFFER_SIZE;
-
-    OSStatus status = AudioFileReadPacketData(player->audioFileID, NO, &byteSize, player->audioPacketFormat, player->readedPacket, ioNumberDataPackets, player->convertBuffer); // Reads packets of audio data from an audio file.
+    OSStatus status = AudioFileReadPacketData(player->audioFileID, NO, &byteSize, player->audioPacketFormat, player->readedPacket, ioNumberDataPackets, player->convertBuffer);
     
     if (outDataPacketDescription) {
         *outDataPacketDescription = player->audioPacketFormat;
@@ -237,14 +203,8 @@ static OSStatus PlayCallback(void *inRefCon,
                              UInt32 inBusNumber,
                              UInt32 inNumberFrames,
                              AudioBufferList *ioData) {
-    AACPlayer *player = (__bridge AACPlayer *)inRefCon;
-//    AudioStreamPacketDescription packetFormat = {0};
-    AudioStreamPacketDescription outPacketDescription;
-    memset(&outPacketDescription, 0, sizeof(AudioStreamPacketDescription));
-    outPacketDescription.mDataByteSize = 128;
-    outPacketDescription.mStartOffset = 0;
-    outPacketDescription.mVariableFramesInPacket = 0;
-
+    LYPlayer *player = (__bridge LYPlayer *)inRefCon;
+    
     player->buffList->mBuffers[0].mDataByteSize = CONST_BUFFER_SIZE;
     OSStatus status = AudioConverterFillComplexBuffer(player->audioConverter, lyInInputDataProc, inRefCon, &inNumberFrames, player->buffList, NULL);
     
@@ -262,16 +222,9 @@ static OSStatus PlayCallback(void *inRefCon,
         dispatch_async(dispatch_get_main_queue(), ^{
             [player stop];
         });
-        
     }
     return noErr;
 }
-
-
-
-
-
-
 
 - (FILE *)pcmFile {
     static FILE *_pcmFile;
@@ -298,34 +251,31 @@ static OSStatus PlayCallback(void *inRefCon,
 
 
 - (void)stop {
-    if (!isPlaying) {
-        return ;
-    }
-    isPlaying = NO;
     AudioOutputUnitStop(audioUnit);
-    [self audio_release];
-}
-
-#pragma mark - private
-
-- (void)audio_release {
-    AudioUnitUninitialize(audioUnit);
     if (buffList != NULL) {
         free(buffList);
         buffList = NULL;
+    }
+    
+    if (self.delegate && [self.delegate respondsToSelector:@selector(onPlayToEnd:)]) {
+        __strong typeof (LYPlayer) *player = self;
+        [self.delegate onPlayToEnd:player];
     }
 }
 
 - (void)dealloc {
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
     AudioOutputUnitStop(audioUnit);
+    AudioUnitUninitialize(audioUnit);
     AudioComponentInstanceDispose(audioUnit);
+    
     if (buffList != NULL) {
         free(buffList);
         buffList = NULL;
     }
-    AudioUnitUninitialize(audioUnit);
-    
+    if (convertBuffer != NULL) {
+        free(convertBuffer);
+        convertBuffer = NULL;
+    }
     AudioConverterDispose(audioConverter);
 }
 
